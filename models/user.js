@@ -17,7 +17,15 @@ const userSchema = new mongoose.Schema({
         type:Date,
         required:true
     },
-    address: {
+    city: {
+        type:String,
+        required:true
+    },
+    latitude: {
+        type:String,
+        required:true
+    },
+    longitude: {
         type:String,
         required:true
     },
@@ -27,7 +35,17 @@ const userSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
-      }
+    },
+
+    friends: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+
+    pendingRequests: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
 })
 
 module.exports = mongoose.model('User', userSchema)

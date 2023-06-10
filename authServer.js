@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const userModel = require('./models/user')
 const RefreshToken = require('./models/refreshToken')
+const geoLocation = require('./externalAPIs/geoLocation')
 const app = express()
 const cors = require('cors');
 
@@ -36,7 +37,9 @@ app.post('/signup', async (req, res) =>{
           return res.status(400).json({error: 'username already taken'});
         }
         const encryptedPassword = await bcrypt.hash(password, salt);
-        const newUser = {...data, password:encryptedPassword};
+        const _geoLocation = await geoLocation(data.city);
+        const {latitude, longitude} = _geoLocation[0];
+        const newUser = {...data, password:encryptedPassword, latitude:latitude, longitude:longitude};
         const user = new userModel(newUser);
          
         await user.save();
@@ -52,16 +55,16 @@ app.post('/signup', async (req, res) =>{
 app.post('/login', async (req, res) => {
     try {
       const {username, password} = req.body.data;
-      const user = await userModel.find({username:username});
+      const user = await userModel.findOne({username:username});
       if(user == null) {
         return res.status(400).json({error: 'User not found'});
       }
-      if (await bcrypt.compare(password, user[0].password)){
-        const _user = {username : user[0].username};
+      if (await bcrypt.compare(password, user.password)){
+        const _user = { _id: user._id, username : user.username};
         const accessToken = generateAccessToken(_user);
         const refreshTokenExist = await RefreshToken.find({username:_user.username});
         if(refreshTokenExist.length == 0) {
-          const refreshToken = jwt.sign( _user, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '2m' });
+          const refreshToken = jwt.sign( _user, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '10m' });
           _refreshToken = new RefreshToken({token: refreshToken, username: _user.username});
           await _refreshToken.save()
         }
@@ -86,7 +89,7 @@ const getPayloadFromAccessToken = (accessToken) => {
 
 
 function generateAccessToken(user) {
-    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1m' })
+    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '2m' })
 }
 
 
@@ -102,9 +105,9 @@ app.post('/refresh_token', async (req, res) => {
   const accessTokenPayload = getPayloadFromAccessToken(accessToken);
   
   try {
-    const refreshToken = await RefreshToken.find({username: accessTokenPayload.username});
-    const val = jwt.verify(refreshToken[0].token, process.env.REFRESH_TOKEN_SECRET);
-    const newAccessToken = generateAccessToken({username: accessTokenPayload.username});
+    const refreshToken = await RefreshToken.findOne({username: accessTokenPayload.username});
+    jwt.verify(refreshToken.token, process.env.REFRESH_TOKEN_SECRET);
+    const newAccessToken = generateAccessToken({ _id: accessTokenPayload._id, username: accessTokenPayload.username});
     res.cookie('access_token', newAccessToken, { httpOnly: true });
 
     res.status(200).json({ message: 'Access token refreshed' });
@@ -119,7 +122,6 @@ app.delete('/logout', async (req, res) => {
   const payLoad = getPayloadFromAccessToken(req.cookies.access_token);
   try{
    if(payLoad) await RefreshToken.deleteOne({username: payLoad.username});
-    console.log("reached here")
     res.clearCookie('access_token')
     .status(204)
     .json({messafe: "Log Out was Success"})

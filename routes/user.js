@@ -2,82 +2,140 @@ const express = require('express')
 const userModel = require('../models/user')
 const router = express.Router()
 const cookieParser = require('cookie-parser');
+const {findGeoLocationDistances} = require('../externalAPIs/distanceCalc')
 const jwt = require('jsonwebtoken');
 
 router.use(cookieParser());
 
-// get user by username
-router.get('/users/:username', authenticateToken, async (req, res) => {
+// post method to accept request
+router.post('/acceptfriend', authenticateToken, async (req, res) => {
     try {
-      const username = req.params.username;
-      console.log(username)
-      const user = await userModel.find({username: username});
-      
-      console.log("user",user);
-      if (user) {
-        res.json(user);
+      const friendUsername = req.body.username;
+      const userUsername = req.user.username;
+  
+      const user = await userModel.findOne({username: userUsername});
+      const friend = await userModel.findOne({username: friendUsername});
+ 
+      if (user && friend) {
+        user.friends.push(friend._id);
+        friend.friends.push(user._id);
+
+        user.pendingRequests = user.pendingRequests.filter(request => (request._id == friend._id));
+        await Promise.all([user.save(), friend.save()]);
+        res.json({message: "Successfully added"});
       } else {
-        res.status(404).json({ error: 'User not found' });
+        res.status(404).json({ error: 'user or friend not found' });
       }
     } catch (error) {
       res.status(500).json({ error: 'Failed to retrieve user', error });
     }
   });
 
-// get all users
-router.get('/users', async (req, res) => {
+  // post method to accept the pending requests
+  router.post('/pendingrequest', authenticateToken, async (req, res) => {
     try {
-      const users = await userModel.find();
+      const friendUsername = req.body.username;
+      const userId= req.user._id
   
-      res.json(users);
+      const friend = await userModel.findOne({username: friendUsername});
+ 
+      if (friend) {
+        friend.pendingRequests.push(userId);
+
+        await friend.save();
+        res.json({message: "Successfully sent request"});
+      } else {
+        res.status(404).json({ error: 'Friend not found' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve user', error });
+    }
+  });
+
+  //method to remove a friend
+  router.post('/removefriend', authenticateToken, async (req, res) => {
+    try {
+      const friendUsername = req.body.username;
+      const userUsername = req.user.username;
+  
+      const user = await userModel.findOne({username: userUsername});
+      const friend = await userModel.findOne({username: friendUsername});
+ 
+      if (user && friend) {
+        user.friends = user.friends.filter(eachFriend => eachFriend._id == friend._id )
+        friend.friends = friend.friends.filter(eachFriend => eachFriend._id == user._id )
+
+        await Promise.all([user.save(), friend.save()]);
+        res.json({message: "Successfully removed"});
+      } else {
+        res.status(404).json({ error: 'user or friend not found' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve useror friend', error });
+    }
+  });
+
+   //method to decline a friend request
+   router.post('/declinerequest', authenticateToken, async (req, res) => {
+    try {
+      const friendUsername = req.body.username;
+      const userUsername = req.user.username;
+  
+      const user = await userModel.findOne({username: userUsername});
+      const friend = await userModel.findOne({username: friendUsername});
+      
+      if (user && friend) {
+        user.pendingRequests = user.pendingRequests.filter(request => request._id == friend._id)
+
+        await user.save();
+        res.json({message: "Request succesfully declined"});
+      } else {
+        res.status(404).json({ error: 'user or friend not found' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve user or friend', error });
+    }
+  });
+
+
+// get method to add friends
+router.get('/addfriends', authenticateToken,  async (req, res) => {
+
+  const username = req.user.username;
+    try {
+      const users = await userModel.find({ username: {$ne: username}});
+      console.log(users);
+      const friendsFilteredDetails = users.map(user => ({ username: user.username, name: user.name }));
+      res.json(friendsFilteredDetails);
     } catch (error) {
       
       res.status(500).json({ error: 'Failed to retrieve users' });
     }
   })
 
-//delete a user
-router.delete('/users/:id', async (req, res) => {
-    try {
-      const userId = req.params.id;
-  
-      const deletedUser = await userModel.findByIdAndDelete(userId);
-
-      if (deletedUser) {
-        res.json({ message: 'User deleted successfully' });
-      } else {
-        res.status(404).json({ error: 'User not found' });
-      }
-    } catch (error) {
-
-      res.status(500).json({ error: 'Failed to delete user' });
-    }
-  });
-
-  //update query for address or/and description
-  router.put('/users/:id', async (req, res) => {
+  //get method to receive the closest distance friend(s)
+  router.get('/friends/:number', authenticateToken, async (req, res) => {
     try {
      
-      const userId = req.params.id;
-      const { address, description } = req.body;
-      const updateFields = {};
-  
-      if (address) {
-        updateFields.address = address;
-      }
-      if (description) {
-        updateFields.description = description;
-      }
+      const number = req.params.number;
+      const username = req.user.username;
+     
+      const user = await userModel.findOne({ username: username }).populate('friends', 'name latitude longitude city');
 
-      const updatedUser = await userModel.findByIdAndUpdate(userId, updateFields, { new: true });
-  
-      if (updatedUser) {
-        res.json(updatedUser);
+      if (user) {
+        const userLatitude = user.latitude;
+        const userLongitude = user.longitude;
+        const friendCoordinates = user.friends.map(friend => friend);
+        console.log(friendCoordinates);
+        const distances = findGeoLocationDistances(userLatitude, userLongitude, friendCoordinates);
+
+        const closestFriends = distances.slice(0, number);
+        res.json({ city: user.city, closestFriends });
       } else {
-        res.status(404).json({ error: 'User not found' });
-      }
+          console.log('User not found');
+        }
     } catch (error) {
-      res.status(500).json({ error: 'Failed to update user' });
+      res.status(500).json({ error: "Failed to recieve friend's distances" });
     }
   });
 
@@ -86,11 +144,12 @@ router.delete('/users/:id', async (req, res) => {
   function authenticateToken(req, res, next) {
     
     const accessToken = req.cookies.access_token;
-    console.log("token",accessToken)
+
     try {
     jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
       if (err) return res.sendStatus(403).json({message : err})
-      console.log("user", user)
+
+      req.user = user;
       next();
     });
     } catch (err){
