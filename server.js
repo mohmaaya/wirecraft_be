@@ -5,7 +5,8 @@ const userRouter = require('./routes/user')
 const cors = require('cors');
 
 app.use(cors({
-    origin: "*"
+    origin: "*",
+    credentials: "include"
 }));
 const mongoose = require('mongoose');
 mongoose.connect(process.env.DATABASE_URL, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -16,4 +17,9 @@ db.once('open', () => console.log('Connected to DB'))
 
 app.use(express.json())
 app.use('/', userRouter)
+
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    next();
+  });
 app.listen(4000)

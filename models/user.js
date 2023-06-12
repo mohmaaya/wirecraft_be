@@ -46,6 +46,12 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+
+    sentRequests: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+
 })
 
 module.exports = mongoose.model('User', userSchema)

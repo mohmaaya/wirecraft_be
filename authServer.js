@@ -19,6 +19,11 @@ app.use(express.json())
 
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
 const mongoose = require('mongoose');
 mongoose.connect(process.env.DATABASE_URL, { useNewUrlParser: true, useUnifiedTopology: true });
 const db = mongoose.connection;
@@ -65,11 +70,11 @@ app.post('/login', async (req, res) => {
         const refreshTokenExist = await RefreshToken.find({username:_user.username});
         if(refreshTokenExist.length == 0) {
           const refreshToken = jwt.sign( _user, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '10m' });
-          _refreshToken = new RefreshToken({token: refreshToken, username: _user.username});
+          const _refreshToken = new RefreshToken({token: refreshToken, username: _user.username});
           await _refreshToken.save()
         }
-        res.cookie('access_token', accessToken, { httpOnly: true })
-        .status(200).json({ username: username });
+       // res.cookie('access_token', accessToken, { httpOnly: true })
+          res.status(200).json({ username: username, access_token: accessToken });
 
       }
     } catch (error) {
@@ -89,39 +94,40 @@ const getPayloadFromAccessToken = (accessToken) => {
 
 
 function generateAccessToken(user) {
-    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '2m' })
+    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1m' })
 }
 
 
 //Method to refresh the expired token
-app.post('/refresh_token', async (req, res) => {
-  const accessToken = req.cookies.access_token;
+app.get('/refreshtoken', async (req, res) => {
 
-  if (!accessToken) {
-    res.status(401).json({ message: 'Access token not found' });
-    return;
-  }
-
-  const accessTokenPayload = getPayloadFromAccessToken(accessToken);
-  
+  const authHeader = req.headers['authorization']
+  const accessToken = authHeader && authHeader.split(' ')[1]
   try {
+
+    const accessTokenPayload = getPayloadFromAccessToken(accessToken);
+
     const refreshToken = await RefreshToken.findOne({username: accessTokenPayload.username});
     jwt.verify(refreshToken.token, process.env.REFRESH_TOKEN_SECRET);
     const newAccessToken = generateAccessToken({ _id: accessTokenPayload._id, username: accessTokenPayload.username});
-    res.cookie('access_token', newAccessToken, { httpOnly: true });
+   
+   // res.cookie('access_token', newAccessToken, { httpOnly: true, expires: expirationDate});
 
-    res.status(200).json({ message: 'Access token refreshed' });
+    res.status(200).json({ access_token: newAccessToken });
   } catch (err) {
-    res.status(401).json({ message: 'Invalid or expired access token or refresh token',err });
+    res.status(403).json({ message: 'Invalid or expired access token or refresh token',err });
   }
 });
 
 app.delete('/logout', async (req, res) => {
   
   
-  const payLoad = getPayloadFromAccessToken(req.cookies.access_token);
-  try{
-   if(payLoad) await RefreshToken.deleteOne({username: payLoad.username});
+  const authHeader = req.headers['authorization']
+  const accessToken = authHeader && authHeader.split(' ')[1]
+  try {
+
+    const accessTokenPayload = getPayloadFromAccessToken(accessToken);
+   if(accessTokenPayload) await RefreshToken.deleteOne({username: accessTokenPayload.username});
     res.clearCookie('access_token')
     .status(204)
     .json({messafe: "Log Out was Success"})
