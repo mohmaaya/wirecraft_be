@@ -29,7 +29,7 @@ router.post('/acceptfriend', authenticateToken, async (req, res) => {
       res.status(404).json({ error: 'user or friend not found' });
     }
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve user', error });
+    res.status(500).json({ error: 'Failed to retrieve user' });
   }
 });
 
@@ -44,14 +44,14 @@ router.get('/myprofile', authenticateToken, async (req, res) => {
     if (user) {
      const userDetails = {
       name: user.name, dob: user.dob, city: user.city, latitude: user.latitude,
-      longitude: user.longitude, description:user.description, friends: user.friends.length
+      longitude: user.longitude, designation:user.designation, friends: user.friends.length
       }
       res.json(userDetails);
     } else {
       res.status(404).json({ error: 'user not found' });
     }
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve user', error });
+    res.status(500).json({ error: 'Failed to retrieve user' });
   }
 });
 
@@ -75,7 +75,7 @@ router.get('/myprofile', authenticateToken, async (req, res) => {
         res.status(404).json({ error: 'Friend not found' });
       }
     } catch (error) {
-      res.status(500).json({ error: 'Failed to retrieve user', error });
+      res.status(500).json({ error: 'Failed to retrieve user' });
     }
   });
 
@@ -164,7 +164,8 @@ router.get('/myprofile', authenticateToken, async (req, res) => {
   
       const friendsFilteredDetails = users.map(user => ({
         username: user.username,
-        name: user.name
+        name: user.name,
+        city: user.city
       }));
   
       res.json(friendsFilteredDetails);
@@ -193,7 +194,7 @@ router.get('/myfriends', authenticateToken,  async (req, res) => {
 
   const username = req.user.username;
     try {
-      const user = await userModel.findOne({ username: username }).populate('friends', 'name username dob ');
+      const user = await userModel.findOne({ username: username }).populate('friends', 'name username dob city ');
       const myFriends = user.friends.map(friend =>friend);
       res.json(myFriends);
     } catch (error) {
@@ -233,9 +234,7 @@ router.get('/checkpending', authenticateToken,  async (req, res) => {
 
         const closestFriends = distances.slice(0, number);
         res.json({ city: user.city, closestFriends });
-      } else {
-          console.log('User not found');
-        }
+      } 
     } catch (error) {
       res.status(500).json({ error: "Failed to recieve friend's distances" });
     }
@@ -252,10 +251,10 @@ router.get('/checkpending', authenticateToken,  async (req, res) => {
       next();
     } catch (err) {
       if (err instanceof jwt.TokenExpiredError) {
-        res.status(401).json({ message: 'Access token expired',err });
+        res.status(401).json({ message: 'Access token expired' });
       } else {
         console.log(err);
-        res.status(403).json({ message: 'Invalid access token',err });
+        res.status(403).json({ message: 'Invalid access token' });
       }
     }
   };

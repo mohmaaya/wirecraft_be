@@ -51,7 +51,7 @@ app.post('/signup', async (req, res) =>{
 
         res.status(201).json({message: 'User Created!'});
     } catch(error){
-        res.status(500).json({error:'Failure. User not created.'+ error});
+        res.status(500).json({error:'Failure. User not created.'});
     }
     
 })
@@ -76,9 +76,11 @@ app.post('/login', async (req, res) => {
        // res.cookie('access_token', accessToken, { httpOnly: true })
           res.status(200).json({ username: username, access_token: accessToken });
 
+      }else{
+        res.status(400).json({error: 'Wrong password'});
       }
     } catch (error) {
-      res.status(500).json({ error: 'Failed to retrieve user', error });
+      res.status(500).json({ error: 'Failed to retrieve user' });
     }
   });
 
@@ -115,7 +117,7 @@ app.get('/refreshtoken', async (req, res) => {
 
     res.status(200).json({ access_token: newAccessToken });
   } catch (err) {
-    res.status(403).json({ message: 'Invalid or expired access token or refresh token',err });
+    res.status(403).json({ message: 'Invalid or expired access token or refresh token' });
   }
 });
 
@@ -132,7 +134,7 @@ app.delete('/logout', async (req, res) => {
     .status(204)
     .json({messafe: "Log Out was Success"})
   }catch(err){
-    res.status(401).json({message: 'Something went wrong!',err})
+    res.status(401).json({message: 'Something went wrong!'})
   }
 })
 

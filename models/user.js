@@ -29,8 +29,9 @@ const userSchema = new mongoose.Schema({
         type:String,
         required:true
     },
-    description: {
-        type:String
+    designation: {
+        type:String,
+        required:true
     },
     createdAt: {
         type: Date,
